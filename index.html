@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Fraction Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        
+        .control-btn.active {
+            background-color: #ec4899;
+            color: white;
+            box-shadow: 0 0 10px #ec4899;
+        }
+        .modal {
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .modal.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 80%;
+            max-height: 400px;
+            margin: auto;
+        }
+        #line-chart-container {
+            display: none;
+        }
+    </style>
+</head>
+<body class="text-white flex flex-col h-screen bg-black">
+
+    <!-- Header Bar -->
+    <header class="bg-gray-900/50 backdrop-blur-sm shadow-lg z-10 border-b border-gray-700">
+        <div class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-bold text-white">Fraction Visualizer</h1>
+            <div class="flex items-center gap-4">
+                 <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-400">Theme:</span>
+                    <button data-theme="galaxy" class="theme-btn control-btn text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Galaxy</button>
+                    <button data-theme="candy" class="theme-btn control-btn active text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Candy</button>
+                    <button data-theme="forest" class="theme-btn control-btn text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Forest</button>
+                </div>
+                <button id="about-btn" class="text-gray-400 hover:text-white transition font-semibold">About</button>
+                <button id="mute-btn" class="text-2xl">🔊</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Visualization Area -->
+    <div id="visualization-area" class="flex-grow relative flex flex-col md:flex-row items-center justify-center gap-8 p-4">
+        <div id="shapes-container" class="w-full h-full flex flex-col md:flex-row items-center justify-center gap-8">
+            <div class="chart-container">
+                <canvas id="pie-chart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="bar-chart"></canvas>
+            </div>
+        </div>
+        <div id="line-chart-container" class="chart-container w-full max-w-screen-md h-full max-h-full">
+            <canvas id="line-chart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Simplification Steps Modal -->
+    <div id="steps-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl text-white w-full max-w-md relative border border-green-400">
+            <h2 class="text-2xl font-bold mb-4 text-green-400">Simplification Steps</h2>
+            <div id="steps-content" class="text-left space-y-2 text-lg"></div>
+            <button id="steps-continue-btn" class="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Continue</button>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <footer class="bg-gray-900/50 backdrop-blur-sm shadow-inner py-4 px-4 z-10 border-t border-gray-700">
+        <div class="container mx-auto flex flex-wrap justify-center items-center gap-4">
+            <div class="flex items-center gap-2">
+                <input type="number" id="num1" placeholder="Numerator" min="0" max="999" class="control-btn text-center text-lg font-semibold w-28 p-2 border-2 border-gray-600 bg-gray-700 text-white rounded-lg">
+                <span class="text-xl font-light text-gray-500">/</span>
+                <input type="number" id="den1" placeholder="Denominator" min="1" max="999" class="control-btn text-center text-lg font-semibold w-28 p-2 border-2 border-gray-600 bg-gray-700 text-white rounded-lg">
+            </div>
+            <button id="visualize-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-transform transform hover:scale-105">Visualize</button>
+            <button id="reset-btn" class="bg-red-600 hover:bg-red-700 font-semibold py-2 px-4 rounded-lg transition text-white">Reset</button>
+            <div class="flex items-center gap-2">
+                <button id="shapes-mode-btn" class="mode-btn control-btn active font-semibold py-2 px-4 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Shapes</button>
+                <button id="line-mode-btn" class="mode-btn control-btn font-semibold py-2 px-4 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Line</button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- About Modal -->
+    <div id="about-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl text-white w-full max-w-lg relative border border-gray-700">
+            <button id="close-modal-btn" class="absolute top-4 right-4 text-3xl text-gray-400 hover:text-white">&times;</button>
+            <h2 class="text-3xl font-bold mb-4 text-sky-400">About the Fraction Visualizer</h2>
+            <p class="text-gray-300 mb-4">This application is an interactive educational tool designed to make learning fractions intuitive and fun. By leveraging 2D charts, it helps users visualize abstract concepts in a tangible way.</p>
+            <ul class="list-disc list-inside text-left space-y-2 text-gray-300">
+                <li><strong>Visual Themes:</strong> Change the look and feel of the app with Galaxy, Candy, and Forest themes.</li>
+                <li><strong>Step-by-Step Simplification:</strong> Enter any fraction (like 10/20) and the app will show you how to simplify it before visualizing the result.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // --- Basic Setup ---
+        const num1Input = document.getElementById('num1');
+        const den1Input = document.getElementById('den1');
+        const visualizeBtn = document.getElementById('visualize-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const aboutBtn = document.getElementById('about-btn');
+        const aboutModal = document.getElementById('about-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const muteBtn = document.getElementById('mute-btn');
+        const stepsModal = document.getElementById('steps-modal');
+        const stepsContent = document.getElementById('steps-content');
+        const stepsContinueBtn = document.getElementById('steps-continue-btn');
+        const shapesModeBtn = document.getElementById('shapes-mode-btn');
+        const lineModeBtn = document.getElementById('line-mode-btn');
+        const shapesContainer = document.getElementById('shapes-container');
+        const lineChartContainer = document.getElementById('line-chart-container');
+        
+        let pieChart, barChart, lineChart;
+        let isMuted = false;
+        
+        const themes = {
+            galaxy: { VIBRANT_COLOR: '#3b82f6', MUTED_COLOR: '#4b5563', BORDER_COLOR: '#1f2937' },
+            candy: { VIBRANT_COLOR: '#ec4899', MUTED_COLOR: '#fce7f3', BORDER_COLOR: '#fbcfe8' },
+            forest: { VIBRANT_COLOR: '#22c55e', MUTED_COLOR: '#dcfce7', BORDER_COLOR: '#bbf7d0' }
+        };
+        let currentTheme = themes.candy;
+
+        // --- Sound Engine ---
+        let synth;
+        let audioReady = false;
+        
+        async function initAudio() {
+            if (audioReady) return;
+            await Tone.start();
+            synth = new Tone.Synth().toDestination();
+            audioReady = true;
+        }
+
+        const playSound = (note) => {
+            if (!isMuted && audioReady && synth) {
+                synth.triggerAttackRelease(note, "8n", Tone.now());
+            }
+        };
+        
+        // --- Chart Logic ---
+        function initCharts() {
+            Chart.register(ChartDataLabels);
+            Chart.defaults.font.family = 'Inter';
+            Chart.defaults.color = '#e5e7eb';
+
+            const pieCtx = document.getElementById('pie-chart').getContext('2d');
+            pieChart = new Chart(pieCtx, {
+                type: 'pie',
+                data: { labels: [], datasets: [{ data: [1], backgroundColor: [currentTheme.MUTED_COLOR], borderColor: currentTheme.BORDER_COLOR, borderWidth: 5 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }, tooltip: { enabled: false },
+                        datalabels: {
+                            formatter: (value, context) => context.dataIndex + 1,
+                            color: '#fff', font: { weight: 'bold', size: 16 },
+                            textStrokeColor: 'black', textStrokeWidth: 2
+                        }
+                    }
+                }
+            });
+
+            const barCtx = document.getElementById('bar-chart').getContext('2d');
+            barChart = new Chart(barCtx, {
+                type: 'bar',
+                data: { labels: [''], datasets: [] },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    scales: { x: { display: false }, y: { display: false } },
+                    plugins: {
+                        legend: { display: false }, tooltip: { enabled: false },
+                        datalabels: {
+                            formatter: (value, context) => context.dataIndex + 1,
+                            color: '#fff', font: { weight: 'bold', size: 16 },
+                            textStrokeColor: 'black', textStrokeWidth: 2
+                        }
+                    }
+                }
+            });
+
+            const lineCtx = document.getElementById('line-chart').getContext('2d');
+            lineChart = new Chart(lineCtx, {
+                type: 'scatter',
+                data: { datasets: [] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { type: 'linear', position: 'bottom', min: 0, max: 1, grid: { color: '#4b5563' } },
+                        y: { display: false }
+                    },
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } }
+                }
+            });
+        }
+
+        function updateCharts(num, den) {
+            const pieLabels = Array.from({ length: den }, (_, i) => i + 1);
+            const pieColors = pieLabels.map((_, i) => i < num ? currentTheme.VIBRANT_COLOR : currentTheme.MUTED_COLOR);
+            pieChart.data.labels = pieLabels;
+            pieChart.data.datasets[0].data = Array(den).fill(1);
+            pieChart.data.datasets[0].backgroundColor = pieColors;
+            pieChart.data.datasets[0].borderColor = currentTheme.BORDER_COLOR;
+            pieChart.update();
+
+            barChart.data.labels = [''];
+            barChart.data.datasets = Array.from({ length: den }, (_, i) => ({
+                data: [1],
+                backgroundColor: i < num ? currentTheme.VIBRANT_COLOR : currentTheme.MUTED_COLOR,
+                borderColor: currentTheme.BORDER_COLOR,
+                borderWidth: 3
+            }));
+            barChart.options.scales.x.stacked = true;
+            barChart.options.scales.y.stacked = true;
+            barChart.update();
+
+            const lineTicks = Array.from({ length: den + 1 }, (_, i) => ({ x: i / den, y: 0 }));
+            lineChart.data.datasets = [
+                {
+                    data: [{x: 0, y: 0}, {x: 1, y: 0}],
+                    borderColor: currentTheme.MUTED_COLOR,
+                    borderWidth: 3,
+                    showLine: true,
+                    type: 'line'
+                },
+                {
+                    data: lineTicks,
+                    backgroundColor: currentTheme.MUTED_COLOR,
+                    pointRadius: 8,
+                    pointStyle: 'line'
+                },
+                {
+                    data: [{ x: num / den, y: 0 }],
+                    backgroundColor: currentTheme.VIBRANT_COLOR,
+                    pointRadius: 10,
+                    pointStyle: 'triangle',
+                    rotation: 90
+                }
+            ];
+            lineChart.update();
+        }
+
+        // --- Core App Logic ---
+        function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+        
+        function visualizeFraction() {
+            const num = parseInt(num1Input.value);
+            const den = parseInt(den1Input.value);
+            if (isNaN(num) || isNaN(den) || den <= 0 || num < 0 || num > den) {
+                alert("Please enter a valid fraction where the numerator is not greater than the denominator.");
+                return;
+            }
+            
+            const commonDivisor = gcd(num, den);
+            const simplified = { n: num / commonDivisor, d: den / commonDivisor };
+
+            const startVisualization = () => {
+                playSound("C4");
+                updateCharts(simplified.n, simplified.d);
+            };
+
+            if (num !== simplified.n || den !== simplified.d) {
+                stepsContent.innerHTML = `
+                    <p>The fraction <span class="font-bold text-yellow-400">${num}/${den}</span> can be simplified.</p>
+                    <p>1. Find the Greatest Common Divisor (GCD) of ${num} and ${den}, which is <span class="font-bold text-yellow-400">${commonDivisor}</span>.</p>
+                    <p>2. Divide both the numerator and the denominator by the GCD:</p>
+                    <div class="pl-4 font-mono">
+                        <p>${num} ÷ ${commonDivisor} = ${simplified.n}</p>
+                        <p>${den} ÷ ${commonDivisor} = ${simplified.d}</p>
+                    </div>
+                    <p>3. The simplified fraction is <span class="font-bold text-yellow-400">${simplified.n}/${simplified.d}</span>.</p>
+                `;
+                stepsModal.classList.remove('hidden');
+                
+                stepsContinueBtn.onclick = () => {
+                    stepsModal.classList.add('hidden');
+                    startVisualization();
+                };
+            } else {
+                startVisualization();
+            }
+        }
+        
+        function resetVisualization(playResetSound = true) {
+            if (playResetSound) playSound("A3");
+            num1Input.value = ''; den1Input.value = '';
+            updateCharts(0, 1);
+        }
+        
+        function setTheme(themeName, playThemeSound = true) {
+            if (playThemeSound) playSound("E4");
+            currentTheme = themes[themeName];
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === themeName);
+            });
+            const activeBtn = document.querySelector(.theme-btn[data-theme="${themeName}"]);
+            if (activeBtn) {
+                const color = themes[themeName].VIBRANT_COLOR;
+                document.querySelectorAll('.control-btn.active').forEach(btn => {
+                    if(!btn.classList.contains('theme-btn')) {
+                         btn.style.backgroundColor = color;
+                         btn.style.boxShadow = 0 0 10px ${color};
+                    }
+                });
+                activeBtn.style.backgroundColor = color;
+                activeBtn.style.boxShadow = 0 0 10px ${color};
+            }
+
+            const currentNum = pieChart.data.datasets[0].data.reduce((a, b) => a + b, 0) > 0 ? pieChart.data.datasets[0].backgroundColor.filter(c => c === themes[document.querySelector('.theme-btn.active').dataset.theme === 'galaxy' ? 'candy' : 'galaxy'].VIBRANT_COLOR).length : 0;
+            const currentDen = pieChart.data.datasets[0].data.length || 1;
+            updateCharts(currentNum, currentDen);
+        }
+        
+        function setMode(mode) {
+            playSound("C4");
+            shapesContainer.style.display = mode === 'shapes' ? 'flex' : 'none';
+            lineChartContainer.style.display = mode === 'line' ? 'block' : 'none';
+            shapesModeBtn.classList.toggle('active', mode === 'shapes');
+            lineModeBtn.classList.toggle('active', mode === 'line');
+        }
+
+        // --- Event Listeners ---
+        const userInteractionEvents = ['click', 'keydown', 'touchstart'];
+        userInteractionEvents.forEach(evt => document.body.addEventListener(evt, initAudio, { once: true }));
+
+        visualizeBtn.addEventListener('click', visualizeFraction);
+        resetBtn.addEventListener('click', () => resetVisualization());
+        aboutBtn.addEventListener('click', () => { playSound("G4"); aboutModal.classList.remove('hidden'); });
+        closeModalBtn.addEventListener('click', () => { playSound("A3"); aboutModal.classList.add('hidden'); });
+        muteBtn.addEventListener('click', () => { isMuted = !isMuted; muteBtn.textContent = isMuted ? '🔇' : '🔊'; });
+        document.querySelectorAll('.theme-btn').forEach(btn => btn.addEventListener('click', (e) => setTheme(e.target.dataset.theme)));
+        shapesModeBtn.addEventListener('click', () => setMode('shapes'));
+        lineModeBtn.addEventListener('click', () => setMode('line'));
+
+        // --- Start ---
+        initCharts();
+        setTheme('candy', false);
+        resetVisualization(false);
+    </script>
+</body>
+</html>
