@@ -50,11 +50,11 @@
             <h1 class="text-xl md:text-2xl font-bold text-white">Fraction Visualizer</h1>
             <div class="flex items-center gap-4">
                  <div class="flex items-center gap-2">
-                    <span class="text-sm font-semibold text-gray-400">Theme:</span>
-                    <button data-theme="galaxy" class="theme-btn control-btn text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Galaxy</button>
-                    <button data-theme="candy" class="theme-btn control-btn active text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Candy</button>
-                    <button data-theme="forest" class="theme-btn control-btn text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Forest</button>
-                </div>
+                     <span class="text-sm font-semibold text-gray-400">Theme:</span>
+                     <button data-theme="galaxy" class="theme-btn control-btn text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Galaxy</button>
+                     <button data-theme="candy" class="theme-btn control-btn active text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Candy</button>
+                     <button data-theme="forest" class="theme-btn control-btn text-sm font-semibold py-1 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition">Forest</button>
+                 </div>
                 <button id="about-btn" class="text-gray-400 hover:text-white transition font-semibold">About</button>
                 <button id="mute-btn" class="text-2xl">🔊</button>
             </div>
@@ -135,6 +135,9 @@
         
         let pieChart, barChart, lineChart;
         let isMuted = false;
+        // MODIFICATION: Added state variables to remember the last visualized fraction
+        let lastValidNum = 0;
+        let lastValidDen = 1;
         
         const themes = {
             galaxy: { VIBRANT_COLOR: '#3b82f6', MUTED_COLOR: '#4b5563', BORDER_COLOR: '#1f2937' },
@@ -189,7 +192,7 @@
                 data: { labels: [''], datasets: [] },
                 options: {
                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                    scales: { x: { display: false }, y: { display: false } },
+                    scales: { x: { display: false, stacked: true }, y: { display: false, stacked: true } },
                     plugins: {
                         legend: { display: false }, tooltip: { enabled: false },
                         datalabels: {
@@ -232,8 +235,6 @@
                 borderColor: currentTheme.BORDER_COLOR,
                 borderWidth: 3
             }));
-            barChart.options.scales.x.stacked = true;
-            barChart.options.scales.y.stacked = true;
             barChart.update();
 
             const lineTicks = Array.from({ length: den + 1 }, (_, i) => ({ x: i / den, y: 0 }));
@@ -269,7 +270,8 @@
             const num = parseInt(num1Input.value);
             const den = parseInt(den1Input.value);
             if (isNaN(num) || isNaN(den) || den <= 0 || num < 0 || num > den) {
-                alert("Please enter a valid fraction where the numerator is not greater than the denominator.");
+                // MODIFICATION: Changed alert to a custom modal or a less intrusive notification in a real app. For now, alert is fine.
+                alert("Please enter a valid fraction where 0 <= numerator <= denominator and denominator > 0.");
                 return;
             }
             
@@ -278,7 +280,10 @@
 
             const startVisualization = () => {
                 playSound("C4");
-                updateCharts(simplified.n, simplified.d);
+                // MODIFICATION: Store the last valid numbers
+                lastValidNum = simplified.n;
+                lastValidDen = simplified.d;
+                updateCharts(lastValidNum, lastValidDen);
             };
 
             if (num !== simplified.n || den !== simplified.d) {
@@ -306,31 +311,38 @@
         function resetVisualization(playResetSound = true) {
             if (playResetSound) playSound("A3");
             num1Input.value = ''; den1Input.value = '';
-            updateCharts(0, 1);
+            // MODIFICATION: Reset state variables
+            lastValidNum = 0;
+            lastValidDen = 1;
+            updateCharts(lastValidNum, lastValidDen);
         }
         
         function setTheme(themeName, playThemeSound = true) {
             if (playThemeSound) playSound("E4");
             currentTheme = themes[themeName];
+            
+            // Update button styles
             document.querySelectorAll('.theme-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.theme === themeName);
+                btn.classList.remove('active');
+                btn.style.backgroundColor = ''; // Reset style
+                btn.style.boxShadow = ''; // Reset style
             });
-            const activeBtn = document.querySelector(.theme-btn[data-theme="${themeName}"]);
+            
+            // MODIFICATION: Fixed syntax error here. Added quotes around the selector.
+            const activeBtn = document.querySelector(`.theme-btn[data-theme="${themeName}"]`);
             if (activeBtn) {
+                activeBtn.classList.add('active');
                 const color = themes[themeName].VIBRANT_COLOR;
+                // Apply active styles to the mode buttons as well
                 document.querySelectorAll('.control-btn.active').forEach(btn => {
-                    if(!btn.classList.contains('theme-btn')) {
-                         btn.style.backgroundColor = color;
-                         btn.style.boxShadow = 0 0 10px ${color};
-                    }
+                    btn.style.backgroundColor = color;
+                    // MODIFICATION: Fixed syntax error here. Used template literal for the string.
+                    btn.style.boxShadow = `0 0 10px ${color}`;
                 });
-                activeBtn.style.backgroundColor = color;
-                activeBtn.style.boxShadow = 0 0 10px ${color};
             }
 
-            const currentNum = pieChart.data.datasets[0].data.reduce((a, b) => a + b, 0) > 0 ? pieChart.data.datasets[0].backgroundColor.filter(c => c === themes[document.querySelector('.theme-btn.active').dataset.theme === 'galaxy' ? 'candy' : 'galaxy'].VIBRANT_COLOR).length : 0;
-            const currentDen = pieChart.data.datasets[0].data.length || 1;
-            updateCharts(currentNum, currentDen);
+            // MODIFICATION: Simplified the logic to re-apply the theme to the current chart
+            updateCharts(lastValidNum, lastValidDen);
         }
         
         function setMode(mode) {
@@ -339,6 +351,8 @@
             lineChartContainer.style.display = mode === 'line' ? 'block' : 'none';
             shapesModeBtn.classList.toggle('active', mode === 'shapes');
             lineModeBtn.classList.toggle('active', mode === 'line');
+            // Re-apply theme colors to the newly activated button
+            setTheme(document.querySelector('.theme-btn.active').dataset.theme, false);
         }
 
         // --- Event Listeners ---
